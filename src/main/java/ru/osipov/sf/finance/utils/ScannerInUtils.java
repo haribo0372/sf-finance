@@ -37,10 +37,6 @@ public final class ScannerInUtils {
     return readString(title, s -> !s.isBlank(), "строка не может быть пустой");
   }
 
-  public static int readInteger(String title) {
-    return readInteger(title, s -> true, null);
-  }
-
   public static int readInteger(String title, Predicate<Integer> predicate, String errorMessage) {
     return read(
         title,

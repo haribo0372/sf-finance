@@ -17,6 +17,13 @@ public class Budget {
   private Integer sum;
   private String category;
 
+  public Budget(UUID id, UUID userId, Integer sum, Category category) {
+    this.id = id;
+    this.userId = userId;
+    this.sum = sum;
+    this.category = category.getName();
+  }
+
   @Override
   public String toString() {
     return "Budget{" + "category='" + category + '\'' + ", sum=" + sum + '}';

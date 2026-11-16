@@ -6,6 +6,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.*;
 import ru.osipov.sf.finance.config.ApplicationConfig;
+import ru.osipov.sf.finance.exception.LoginException;
+import ru.osipov.sf.finance.exception.UserAlreadyExists;
+import ru.osipov.sf.finance.exception.ValidateInputException;
 import ru.osipov.sf.finance.models.entity.User;
 import ru.osipov.sf.finance.services.AbstractEntityService;
 import ru.osipov.sf.finance.services.AuthService;
@@ -29,34 +32,29 @@ public class AuthServiceImpl extends AbstractEntityService<User> implements Auth
   }
 
   @Override
-  public Optional<User> register(String username, String password) {
+  public User register(String username, String password) {
     if (username == null || username.isBlank() || password == null || password.isBlank()) {
-      System.out.println("Логин и пароль не могут быть пустыми.");
-      return Optional.empty();
+      throw new ValidateInputException("Логин и пароль не могут быть пустыми.");
     }
     if (storage.containsKey(username)) {
-      System.out.println("Пользователь с таким логином уже существует.");
-      return Optional.empty();
+      throw new UserAlreadyExists("Пользователь с таким логином уже существует.");
     }
     User user = new User(UUID.randomUUID(), username, hash(password));
     storage.put(username, user);
     this.saveToFile();
-    System.out.println("Регистрация прошла успешно");
-    return Optional.of(user);
+    return user;
   }
 
   @Override
-  public Optional<User> login(String username, String password) {
+  public User login(String username, String password) {
     User user = storage.get(username);
-    if (user == null) {
-      System.out.println("Пользователь не найден.");
-      return Optional.empty();
-    }
+
+    if (user == null) throw new LoginException("Пользователь не найден.");
+
     if (!user.getPasswordHash().equals(hash(password))) {
-      System.out.println("Неверный пароль.");
-      return Optional.empty();
+      throw new LoginException("Неверный пароль.");
     }
-    System.out.println("Вход выполнен. Добро пожаловать, " + username + "!");
-    return Optional.of(user);
+
+    return user;
   }
 }

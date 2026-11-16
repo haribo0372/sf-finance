@@ -4,10 +4,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import ru.osipov.sf.finance.config.ApplicationConfig;
+import ru.osipov.sf.finance.exception.CategoryAlreadyExistsException;
+import ru.osipov.sf.finance.exception.CategoryNotFoundException;
 import ru.osipov.sf.finance.models.entity.Category;
 import ru.osipov.sf.finance.services.AbstractEntityService;
 import ru.osipov.sf.finance.services.CategoryService;
@@ -24,24 +25,21 @@ public class CategoryServiceImpl extends AbstractEntityService<Category>
   public Category save(UUID userId, String name) {
     String nameUpperCase = name.toUpperCase();
     Category category = storage.get(nameUpperCase);
-    String message;
 
-    if (category == null) {
-      category = new Category(UUID.randomUUID(), nameUpperCase, userId, LocalDate.now());
-      storage.put(nameUpperCase, category);
-      saveToFile();
-      message = "Категория успешно создана: ";
-    } else {
-      message = "Категория уже существует: ";
-    }
+    if (category != null) throw new CategoryAlreadyExistsException(nameUpperCase);
 
-    System.out.println(message + category);
+    category = new Category(UUID.randomUUID(), nameUpperCase, userId, LocalDate.now());
+    storage.put(nameUpperCase, category);
+    saveToFile();
     return category;
   }
 
   @Override
-  public Optional<Category> findByName(String name) {
-    return Optional.ofNullable(storage.get(name.toUpperCase()));
+  public Category findByName(String name) {
+    var upperName = name.toUpperCase();
+    Category category = storage.get(upperName);
+    if (category == null) throw new CategoryNotFoundException(upperName);
+    return category;
   }
 
   @Override

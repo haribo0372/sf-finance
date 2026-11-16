@@ -9,13 +9,11 @@ public class ApplicationConfig {
 
   private final String userFile;
   private final String transactionFile;
-  private final String budgetFile;
   private final String categoryFile;
 
   public ApplicationConfig() {
     this.userFile = requireEnv("FILE_USER");
     this.transactionFile = requireEnv("FILE_TRANSACTIONS");
-    this.budgetFile = requireEnv("FILE_BUDGET");
     this.categoryFile = requireEnv("FILE_CATEGORY");
   }
 
