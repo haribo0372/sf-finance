@@ -41,14 +41,7 @@ class ReportPrinterTest {
   }
 
   private Transaction newTransaction(Category category, int sum, TransactionType type) {
-    return Transaction.builder()
-        .id(UUID.randomUUID())
-        .userId(USER_ID)
-        .sum(sum)
-        .type(type)
-        .category(category.getName())
-        .date(LocalDate.now())
-        .build();
+    return new Transaction(UUID.randomUUID(), USER_ID, sum, type, category, LocalDate.now());
   }
 
   @Test

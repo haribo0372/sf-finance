@@ -47,14 +47,7 @@ public class TransactionServiceImpl extends AbstractEntityService<FinancialSumma
         storage.computeIfAbsent(userId.toString(), k -> new FinancialSummary(userId));
 
     Transaction transaction =
-        Transaction.builder()
-            .id(UUID.randomUUID())
-            .userId(userId)
-            .sum(sum)
-            .type(type)
-            .category(category.getName())
-            .date(LocalDate.now())
-            .build();
+        new Transaction(UUID.randomUUID(), userId, sum, type, category, LocalDate.now());
 
     financialSummary.addTransaction(category, transaction);
     saveToFile();

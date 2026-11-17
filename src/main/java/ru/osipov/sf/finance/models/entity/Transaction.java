@@ -3,14 +3,12 @@ package ru.osipov.sf.finance.models.entity;
 import java.time.LocalDate;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import ru.osipov.sf.finance.models.enums.TransactionType;
 
 /** Модель данных транзакции */
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class Transaction {
@@ -21,6 +19,16 @@ public class Transaction {
   private TransactionType type;
   private String category;
   private LocalDate date;
+
+  public Transaction(
+      UUID id, UUID userId, Integer sum, TransactionType type, Category category, LocalDate date) {
+    this.id = id;
+    this.userId = userId;
+    this.sum = sum;
+    this.type = type;
+    this.category = category.getName();
+    this.date = date;
+  }
 
   @Override
   public String toString() {
