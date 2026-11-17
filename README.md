@@ -444,7 +444,9 @@ GitHub Actions (`.github/workflows/ci.yaml`):
 - **Spotless check** — проверка форматирования.
 - **Build and test** — `mvn -B -Pci verify`.
 
-Запускается на `push` и `pull_request` в `main`.
+Запускается при:
+- `push` в ветки `main`, `develop`;
+- `pull_request` в ветку `main`.
 
 Локально:
 
