@@ -7,11 +7,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import ru.osipov.sf.finance.config.ApplicationConfig;
-import ru.osipov.sf.finance.exception.CategoryAlreadyExistsException;
-import ru.osipov.sf.finance.exception.CategoryNotFoundException;
+import ru.osipov.sf.finance.exception.out.CategoryAlreadyExistsException;
+import ru.osipov.sf.finance.exception.out.CategoryNotFoundException;
 import ru.osipov.sf.finance.models.entity.Category;
-import ru.osipov.sf.finance.services.AbstractEntityService;
 import ru.osipov.sf.finance.services.CategoryService;
+import ru.osipov.sf.finance.services.base.AbstractEntityService;
 
 public class CategoryServiceImpl extends AbstractEntityService<Category>
     implements CategoryService {
@@ -44,6 +44,6 @@ public class CategoryServiceImpl extends AbstractEntityService<Category>
 
   @Override
   public Set<String> getAllCategoryNames() {
-    return storage.keySet();
+    return Set.copyOf(storage.keySet());
   }
 }

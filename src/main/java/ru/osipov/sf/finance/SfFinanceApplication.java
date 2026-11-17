@@ -4,24 +4,31 @@ import java.util.Scanner;
 import java.util.Set;
 import ru.osipov.sf.finance.config.ApplicationConfig;
 import ru.osipov.sf.finance.config.JsonConfig;
-import ru.osipov.sf.finance.exception.BaseException;
-import ru.osipov.sf.finance.exception.CategoryNotFoundException;
-import ru.osipov.sf.finance.models.FinancialSummary;
-import ru.osipov.sf.finance.models.TransactionData;
+import ru.osipov.sf.finance.exception.base.BaseException;
+import ru.osipov.sf.finance.exception.out.CategoryNotFoundException;
+import ru.osipov.sf.finance.exception.out.EofException;
+import ru.osipov.sf.finance.models.aggregate.FinancialSummary;
+import ru.osipov.sf.finance.models.aggregate.TransactionData;
 import ru.osipov.sf.finance.models.entity.Budget;
 import ru.osipov.sf.finance.models.entity.User;
 import ru.osipov.sf.finance.models.enums.TransactionType;
+import ru.osipov.sf.finance.models.result.TransactionResult;
+import ru.osipov.sf.finance.modules.printers.ReportPrinter;
+import ru.osipov.sf.finance.modules.printers.WarningPrinter;
+import ru.osipov.sf.finance.modules.readers.ConsoleInputReader;
 import ru.osipov.sf.finance.services.AuthService;
 import ru.osipov.sf.finance.services.CategoryService;
 import ru.osipov.sf.finance.services.TransactionService;
 import ru.osipov.sf.finance.services.impl.AuthServiceImpl;
 import ru.osipov.sf.finance.services.impl.CategoryServiceImpl;
 import ru.osipov.sf.finance.services.impl.TransactionServiceImpl;
-import ru.osipov.sf.finance.utils.ScannerInUtils;
 
 public class SfFinanceApplication {
 
+  private static final int MAX_CATEGORY_NAME_LENGTH = 16;
+
   private static final Scanner scanner;
+  private static final ConsoleInputReader consoleInputReader;
   private static final ApplicationConfig applicationConfig;
   private static final JsonConfig jsonConfig;
   private static final AuthService authService;
@@ -32,23 +39,26 @@ public class SfFinanceApplication {
 
   static {
     scanner = new Scanner(System.in);
+    consoleInputReader = new ConsoleInputReader(scanner);
 
     applicationConfig = new ApplicationConfig();
     jsonConfig = new JsonConfig();
 
     authService = new AuthServiceImpl(applicationConfig, jsonConfig.getMapper());
     categoryService = new CategoryServiceImpl(applicationConfig, jsonConfig.getMapper());
-
     transactionService =
         new TransactionServiceImpl(applicationConfig, jsonConfig.getMapper(), categoryService);
   }
 
   public static void main(String[] args) {
     while (true) {
-      if (currentUser == null) {
-        guestMenu();
-      } else {
-        userMenu();
+      try {
+        if (currentUser == null) guestMenu();
+        else userMenu();
+      } catch (EofException e) {
+        System.out.println(e.getMessage());
+      } catch (Exception e) {
+        System.out.println("Непредвиденная ошибка: " + e.getMessage());
       }
     }
   }
@@ -111,8 +121,8 @@ public class SfFinanceApplication {
   }
 
   private static void doLogin() {
-    String login = ScannerInUtils.readString("Логин: ");
-    String password = ScannerInUtils.readString("Пароль: ");
+    String login = consoleInputReader.readString("Логин: ");
+    String password = consoleInputReader.readString("Пароль: ");
     try {
       currentUser = authService.login(login, password);
       System.out.println("Вход выполнен. Добро пожаловать, " + currentUser.getUsername() + "!");
@@ -122,8 +132,8 @@ public class SfFinanceApplication {
   }
 
   private static void doRegister() {
-    String login = ScannerInUtils.readString("Логин: ");
-    String password = ScannerInUtils.readString("Пароль: ");
+    String login = consoleInputReader.readString("Логин: ");
+    String password = consoleInputReader.readString("Пароль: ");
 
     try {
       currentUser = authService.register(login, password);
@@ -134,16 +144,17 @@ public class SfFinanceApplication {
   }
 
   private static void doCreateNewTransaction() {
+    String category = readCategoryName("Категория (название): ");
     TransactionType transactionType = readEnumTransactionType();
-    String category = readCategoryName("Категория: ");
     Integer sum =
-        ScannerInUtils.readInteger(
+        consoleInputReader.readInteger(
             "Сумма: ", integer -> integer > 0, "Сумма должна быть положительная");
     try {
-      var registeredTransaction =
+      TransactionResult result =
           transactionService.registerTransaction(
               currentUser.getUuid(), sum, transactionType, category);
-      System.out.println("Транзакция успешно зарегистрирована: " + registeredTransaction);
+      System.out.println("Транзакция успешно зарегистрирована: " + result.getTransaction());
+      WarningPrinter.printWarnings(result.getWarnings());
     } catch (CategoryNotFoundException e) {
       System.out.println(e.getMessage());
       printAllCategories();
@@ -163,9 +174,9 @@ public class SfFinanceApplication {
   }
 
   private static void doCreateNewBudget() {
-    String category = readCategoryName("Категория: ");
+    String category = readCategoryName("Категория (название): ");
     Integer sum =
-        ScannerInUtils.readInteger(
+        consoleInputReader.readInteger(
             "Сумма: ", integer -> integer > 0, "Сумма должна быть положительная");
 
     try {
@@ -181,7 +192,7 @@ public class SfFinanceApplication {
   }
 
   private static void doRemoveBudget() {
-    String category = readCategoryName("Категория: ");
+    String category = readCategoryName("Категория (название): ");
     try {
       transactionService.removeBudget(currentUser.getUuid(), category);
       System.out.println("Бюджет успешно удален");
@@ -191,36 +202,11 @@ public class SfFinanceApplication {
   }
 
   private static void doGetReportByCategory() {
-    String category = readCategoryName("Категория: ");
+    String category = readCategoryName("Категория (название): ");
     try {
       TransactionData txData =
           transactionService.findTransactionsByUserIdAndCategory(currentUser.getUuid(), category);
-
-      Budget budget = txData.getBudget();
-
-      System.out.println();
-      System.out.println("=== Отчёт по категории ===");
-      System.out.printf("Категория:       %s%n", txData.getCategory());
-      System.out.printf(
-          "Бюджет:          %s%n", budget == null ? "<не установлен>" : budget.getSum());
-      System.out.println("--------------------------");
-      System.out.printf("Сумма доходов:   %s%n", txData.getIncomeSum());
-      System.out.printf("Сумма расходов:  %s%n", txData.getExpenseSum());
-      System.out.println("--------------------------");
-
-      if (txData.getTransactions().isEmpty()) {
-        System.out.println("    (нет)");
-        System.out.println("==========================");
-        return;
-      }
-
-      for (var tx : txData.getTransactions()) {
-        System.out.printf(
-            "    - Дата: %s | Тип: %-7s | Сумма: %s%n",
-            tx.getDate(), tx.getType().getLabel(), tx.getSum());
-      }
-
-      System.out.println("==========================");
+      ReportPrinter.printReportByCategory(txData);
     } catch (BaseException e) {
       System.out.println(e.getMessage());
     }
@@ -230,11 +216,7 @@ public class SfFinanceApplication {
     try {
       FinancialSummary summary =
           transactionService.findFinancialSummaryByUserId(currentUser.getUuid());
-      System.out.println();
-      System.out.println("=== Краткий отчёт ===");
-      System.out.printf("Сумма доходов:   %s%n", summary.getIncomeSum());
-      System.out.printf("Сумма расходов:  %s%n", summary.getExpenseSum());
-      System.out.println("=====================");
+      ReportPrinter.printShortReport(summary);
     } catch (BaseException e) {
       System.out.println(e.getMessage());
     }
@@ -244,56 +226,20 @@ public class SfFinanceApplication {
     try {
       FinancialSummary summary =
           transactionService.findFinancialSummaryByUserId(currentUser.getUuid());
-      System.out.println();
-      System.out.println("=== Подробный отчёт ===");
-      System.out.printf("Сумма всех доходов:   %s%n", summary.getIncomeSum());
-      System.out.printf("Сумма всех расходов:  %s%n", summary.getExpenseSum());
-      System.out.println("=======================");
-
-      if (summary.getTransactionsByCategory().isEmpty()) {
-        System.out.println("Транзакций нет.");
-        return;
-      }
-
-      for (var entry : summary.getTransactionsByCategory().entrySet()) {
-        String category = entry.getKey();
-        TransactionData txData = entry.getValue();
-        Budget budget = txData.getBudget();
-
-        System.out.println();
-        System.out.printf("Категория: %s%n", category);
-        System.out.printf("  Бюджет:  %s%n", budget == null ? "<не установлен>" : budget.getSum());
-        System.out.printf("  Доходы:  %s%n", txData.getIncomeSum());
-        System.out.printf("  Расходы: %s%n", txData.getExpenseSum());
-        System.out.println("  Транзакции:");
-
-        if (txData.getTransactions().isEmpty()) {
-          System.out.println("    (нет)");
-          continue;
-        }
-
-        for (var tx : txData.getTransactions()) {
-          System.out.printf(
-              "    - Дата: %s | Тип: %-7s | Сумма: %s%n",
-              tx.getDate(), tx.getType().getLabel(), tx.getSum());
-        }
-      }
-      System.out.println("=======================");
+      ReportPrinter.printFullReport(summary);
     } catch (BaseException e) {
       System.out.println(e.getMessage());
     }
   }
 
   private static TransactionType readEnumTransactionType() {
-    return ScannerInUtils.readEnum(TransactionType.class, "Доступные типы транзакции:");
+    return consoleInputReader.readEnum(TransactionType.class, "Доступные типы транзакции:");
   }
 
   private static String readCategoryName(String title) {
     printAllCategories();
-    return ScannerInUtils.readString(
-        title,
-        s -> !s.isBlank() && s.length() <= 16,
-        "строка не может быть пустой, макимальная длина строки 16");
+    return consoleInputReader.readString(
+        title, s -> s.length() <= 16, "максимальная длина строки " + MAX_CATEGORY_NAME_LENGTH);
   }
 
   private static void printAllCategories() {

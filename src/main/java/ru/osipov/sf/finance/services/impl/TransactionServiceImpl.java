@@ -3,23 +3,26 @@ package ru.osipov.sf.finance.services.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import ru.osipov.sf.finance.config.ApplicationConfig;
-import ru.osipov.sf.finance.exception.BudgetAlreadyExistsException;
-import ru.osipov.sf.finance.exception.BudgetNotFoundException;
-import ru.osipov.sf.finance.exception.FinancialSummaryNotFoundException;
-import ru.osipov.sf.finance.models.FinancialSummary;
-import ru.osipov.sf.finance.models.TransactionData;
+import ru.osipov.sf.finance.exception.out.BudgetAlreadyExistsException;
+import ru.osipov.sf.finance.exception.out.BudgetNotFoundException;
+import ru.osipov.sf.finance.exception.out.FinancialSummaryNotFoundException;
+import ru.osipov.sf.finance.models.aggregate.FinancialSummary;
+import ru.osipov.sf.finance.models.aggregate.TransactionData;
 import ru.osipov.sf.finance.models.entity.Budget;
 import ru.osipov.sf.finance.models.entity.Category;
 import ru.osipov.sf.finance.models.entity.Transaction;
 import ru.osipov.sf.finance.models.enums.TransactionType;
-import ru.osipov.sf.finance.services.AbstractEntityService;
+import ru.osipov.sf.finance.models.result.TransactionResult;
+import ru.osipov.sf.finance.models.warning.Warning;
 import ru.osipov.sf.finance.services.CategoryService;
 import ru.osipov.sf.finance.services.TransactionService;
+import ru.osipov.sf.finance.services.base.AbstractEntityService;
 
 public class TransactionServiceImpl extends AbstractEntityService<FinancialSummary>
     implements TransactionService {
@@ -36,7 +39,7 @@ public class TransactionServiceImpl extends AbstractEntityService<FinancialSumma
   }
 
   @Override
-  public Transaction registerTransaction(
+  public TransactionResult registerTransaction(
       UUID userId, Integer sum, TransactionType type, String categoryName) {
     Category category = categoryService.findByName(categoryName);
 
@@ -53,15 +56,16 @@ public class TransactionServiceImpl extends AbstractEntityService<FinancialSumma
             .date(LocalDate.now())
             .build();
 
-    financialSummary.addTransaction(transaction);
+    financialSummary.addTransaction(category, transaction);
     saveToFile();
 
+    List<Warning> warnings = new ArrayList<>();
     if (type == TransactionType.EXPENSE) {
-      notifyIfExpensesExceedIncome(financialSummary);
-      notifyIfExpensesExceedBudget(financialSummary, category);
+      checkExpensesExceedIncome(financialSummary).ifPresent(warnings::add);
+      checkExpensesExceedBudget(financialSummary, category).ifPresent(warnings::add);
     }
 
-    return transaction;
+    return new TransactionResult(transaction, warnings);
   }
 
   @Override
@@ -122,50 +126,35 @@ public class TransactionServiceImpl extends AbstractEntityService<FinancialSumma
     return summary;
   }
 
-  private void notifyIfExpensesExceedBudget(FinancialSummary financialSummary, Category category) {
-    Optional<TransactionData> txDataOpt = financialSummary.getTransactionDataByCategory(category);
-    if (txDataOpt.isEmpty()) return;
-
-    TransactionData transactionData = txDataOpt.get();
-    Budget budget = transactionData.getBudget();
-    if (budget == null) return;
-
-    Integer budgetSum = budget.getSum();
-    Integer expenseSum = transactionData.getExpenseSum();
-    if (budgetSum < expenseSum) {
-      int overrun = expenseSum - budgetSum;
-      System.out.println();
-      System.out.println("!!! ВНИМАНИЕ: превышение бюджета !!!");
-      System.out.println("----------------------------------");
-      System.out.printf("Категория:        %s%n", category.getName());
-      System.out.printf("Бюджет:           %s%n", budgetSum);
-      System.out.printf("Сумма расходов:   %s%n", expenseSum);
-      System.out.printf("Превышение:       %s%n", overrun);
-      System.out.println("==================================");
-    } else if (Objects.equals(budgetSum, expenseSum)) {
-      System.out.println();
-      System.out.println("!!! ВНИМАНИЕ: бюджет исчерпан !!!");
-      System.out.println("----------------------------------");
-      System.out.printf("Категория:        %s%n", category.getName());
-      System.out.printf("Бюджет:           %s%n", budgetSum);
-      System.out.printf("Сумма расходов:   %s%n", expenseSum);
-      System.out.printf("Остаток:          %s%n", 0);
-      System.out.println("==================================");
+  private Optional<Warning> checkExpensesExceedIncome(FinancialSummary financialSummary) {
+    int incomeSum = financialSummary.getIncomeSum();
+    int expenseSum = financialSummary.getExpenseSum();
+    if (incomeSum >= expenseSum) {
+      return Optional.empty();
     }
+    return Optional.of(Warning.expensesExceedIncome(incomeSum, expenseSum));
   }
 
-  private void notifyIfExpensesExceedIncome(FinancialSummary financialSummary) {
-    Integer incomeSum = financialSummary.getIncomeSum();
-    Integer expenseSum = financialSummary.getExpenseSum();
-    if (incomeSum < expenseSum) {
-      int deficit = expenseSum - incomeSum;
-      System.out.println();
-      System.out.println("!!! ВНИМАНИЕ: расходы превышают доходы !!!");
-      System.out.println("-----------------------------------------");
-      System.out.printf("Сумма доходов:    %s%n", incomeSum);
-      System.out.printf("Сумма расходов:   %s%n", expenseSum);
-      System.out.printf("Дефицит:          %s%n", deficit);
-      System.out.println("=========================================");
+  private Optional<Warning> checkExpensesExceedBudget(
+      FinancialSummary financialSummary, Category category) {
+    Optional<TransactionData> txDataOpt = financialSummary.getTransactionDataByCategory(category);
+    if (txDataOpt.isEmpty()) {
+      return Optional.empty();
     }
+    TransactionData transactionData = txDataOpt.get();
+    Budget budget = transactionData.getBudget();
+    if (budget == null) {
+      return Optional.empty();
+    }
+
+    int budgetSum = budget.getSum();
+    int expenseSum = transactionData.getExpenseSum();
+    if (budgetSum < expenseSum) {
+      return Optional.of(Warning.expensesExceedBudget(category.getName(), expenseSum, budgetSum));
+    }
+    if (budgetSum == expenseSum) {
+      return Optional.of(Warning.budgetExhausted(category.getName(), expenseSum, budgetSum));
+    }
+    return Optional.empty();
   }
 }

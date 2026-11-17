@@ -1,4 +1,6 @@
-package ru.osipov.sf.finance.exception;
+package ru.osipov.sf.finance.exception.out;
+
+import ru.osipov.sf.finance.exception.base.BaseException;
 
 public class CategoryNotFoundException extends BaseException {
 

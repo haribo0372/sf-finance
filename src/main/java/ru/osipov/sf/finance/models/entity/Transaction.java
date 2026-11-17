@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import ru.osipov.sf.finance.models.enums.TransactionType;
 
+/** Модель данных транзакции */
 @Data
 @Builder
 @NoArgsConstructor
@@ -27,8 +28,9 @@ public class Transaction {
         + "category='"
         + category
         + '\''
-        + ", type="
+        + ", type='"
         + type.getLabel()
+        + '\''
         + ", sum="
         + sum
         + '}';

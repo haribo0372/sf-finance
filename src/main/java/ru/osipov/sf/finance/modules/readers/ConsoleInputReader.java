@@ -1,43 +1,59 @@
-package ru.osipov.sf.finance.utils;
+package ru.osipov.sf.finance.modules.readers;
 
+import java.util.NoSuchElementException;
 import java.util.Scanner;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import ru.osipov.sf.finance.exception.ValidateInputException;
+import lombok.RequiredArgsConstructor;
+import ru.osipov.sf.finance.exception.out.EofException;
+import ru.osipov.sf.finance.exception.out.ValidateInputException;
 import ru.osipov.sf.finance.models.enums.Labeled;
 
-public final class ScannerInUtils {
-  private static final String TEMPLATE_ERROR = "Ошибка ввода: %s.%n";
-  private static Scanner scanner = new Scanner(System.in);
+@RequiredArgsConstructor
+public final class ConsoleInputReader {
 
-  private ScannerInUtils() {}
+  private final Scanner scanner;
 
-  public static <T> T read(String title, Function<String, T> parser) {
+  public <T> T read(String title, Function<String, T> parser) {
     while (true) {
       System.out.print(title);
-      String line = scanner.nextLine().trim();
       try {
+        String line = scanner.nextLine().trim();
         return parser.apply(line);
+      } catch (NoSuchElementException e) {
+        throw new EofException();
       } catch (ValidateInputException e) {
-        System.out.printf(TEMPLATE_ERROR, e.getMessage());
+        System.out.println("Ошибка ввода: " + e.getMessage() + ".");
       }
     }
   }
 
-  public static String readString(String title, Predicate<String> predicate, String errorMessage) {
+  public String readString(String title, Predicate<String> predicate, String errorMessage) {
     return read(
         title,
         s -> {
-          if (predicate.test(s)) return s;
-          throw new ValidateInputException(errorMessage);
+          if (s.isBlank()) {
+            throw new ValidateInputException("строка не может быть пустой");
+          }
+          if (!predicate.test(s)) {
+            throw new ValidateInputException(errorMessage);
+          }
+          return s;
         });
   }
 
-  public static String readString(String title) {
-    return readString(title, s -> !s.isBlank(), "строка не может быть пустой");
+  public String readString(String title) {
+    return read(
+        title,
+        s -> {
+          if (s.isBlank()) {
+            throw new ValidateInputException("строка не может быть пустой");
+          }
+          return s;
+        });
   }
 
-  public static int readInteger(String title, Predicate<Integer> predicate, String errorMessage) {
+  public int readInteger(String title, Predicate<Integer> predicate, String errorMessage) {
     return read(
         title,
         s -> {
@@ -51,7 +67,7 @@ public final class ScannerInUtils {
         });
   }
 
-  public static <T extends Enum<T> & Labeled> T readEnum(Class<T> enumClass, String title) {
+  public <T extends Enum<T> & Labeled> T readEnum(Class<T> enumClass, String title) {
     T[] all = enumClass.getEnumConstants();
 
     System.out.println(title);

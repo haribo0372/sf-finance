@@ -1,6 +1,6 @@
-package ru.osipov.sf.finance.exception;
+package ru.osipov.sf.finance.exception.out;
 
-import ru.osipov.sf.finance.models.entity.Category;
+import ru.osipov.sf.finance.exception.base.BaseException;
 
 public class LoginException extends BaseException {
 
